@@ -12,7 +12,7 @@ at runtime) will get removed too.
 Very helpful when shrinking the size of WebAssembly binaries!
 
 This functionality relies on the "name" section being present in the `.wasm`
-file, so build with debug symbols.
+file, so build with debug symbols:
 
 ```toml
 [profile.release]
