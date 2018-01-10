@@ -1,0 +1,4 @@
+/tests/snipped.wasm
+/target/
+**/*.rs.bk
+Cargo.lock

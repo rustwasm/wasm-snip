@@ -1,0 +1,27 @@
+[package]
+authors = ["Nick Fitzgerald <fitzgen@gmail.com>"]
+description = "Replace a wasm function with an `unreachable`."
+keywords = ["symbol", "wasm", "snip", "size", "profiling"]
+license = "Apache-2.0/MIT"
+name = "wasm-snip"
+readme = "./README.md"
+repository = "https://github.com/fitzgen/wasm-snip"
+version = "0.1.0"
+
+[[bin]]
+doc = false
+name = "wasm-snip"
+path = "src/bin/wasm-snip.rs"
+required-features = ["exe"]
+
+[dependencies]
+failure = "0.1.1"
+parity-wasm = "0.19.0"
+
+[dependencies.clap]
+optional = true
+version = "2.29.0"
+
+[features]
+default = ["exe"]
+exe = ["clap"]
