@@ -2,12 +2,14 @@
 
 [![](https://docs.rs/wasm-snip/badge.svg)](https://docs.rs/wasm-snip/) [![](https://img.shields.io/crates/v/wasm-snip.svg)](https://crates.io/crates/wasm-snip) [![](https://img.shields.io/crates/d/wasm-snip.png)](https://crates.io/crates/wasm-snip) [![Build Status](https://travis-ci.org/fitzgen/wasm-snip.png?branch=master)](https://travis-ci.org/fitzgen/wasm-snip)
 
-`wasm-snip` replaces a WebAssembly function's body with a `unreachable`.
+`wasm-snip` replaces a WebAssembly function's body with an `unreachable`.
 
 Maybe you know that some function will never be called at runtime, but the
-compiler can't prove that at compile time? Snip it! Then run `wasm-gc`[0] again
-and all the functions it transitively called (which could also never be called
-at runtime) will get removed too.
+compiler can't prove that at compile time? Snip it! Then run
+[`wasm-gc`][wasm-gc] again and all the functions it transitively called (which
+could also never be called at runtime) will get removed too.
+
+[wasm-gc]: https://github.com/alexcrichton/wasm-gc
 
 Very helpful when shrinking the size of WebAssembly binaries!
 

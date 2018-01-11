@@ -58,6 +58,8 @@ and all the functions it transitively called (which could also never be called
 at runtime) will get removed too.
 
 Very helpful when shrinking the size of WebAssembly binaries!
+
+[0]: https://github.com/alexcrichton/wasm-gc
 ",
         )
         .arg(
