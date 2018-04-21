@@ -83,7 +83,7 @@ dual licensed as above, without any additional terms or conditions.
 extern crate failure;
 extern crate parity_wasm;
 
-use parity_wasm::elements::{self, Deserialize};
+use parity_wasm::elements;
 use std::collections::hash_map::{Entry, HashMap};
 use std::path;
 
@@ -100,60 +100,13 @@ pub struct Options {
 
 const FUNCTION_NAMES: u8 = 1;
 
-// Adapted from `wasm-gc`; waiting for the name section support to be upstreamed
-// into parity-wasm.
-fn decode_name_map<'a>(mut bytes: &'a [u8]) -> Result<HashMap<String, usize>, failure::Error> {
-    while !bytes.is_empty() {
-        let name_type = u8::from(elements::VarUint7::deserialize(&mut bytes)?);
-        let name_payload_len = u32::from(elements::VarUint32::deserialize(&mut bytes)?);
-        let (these_bytes, rest) = bytes.split_at(name_payload_len as usize);
-
-        if name_type == FUNCTION_NAMES {
-            bytes = these_bytes;
-        } else {
-            bytes = rest;
-            continue;
-        }
-
-        let count = u32::from(elements::VarUint32::deserialize(&mut bytes)?);
-        let mut names = HashMap::with_capacity(count as usize);
-        for _ in 0..count {
-            let index = usize::from(elements::VarUint32::deserialize(&mut bytes)?);
-
-            let name_len = usize::from(elements::VarUint32::deserialize(&mut bytes)?);
-            let (name, rest) = bytes.split_at(name_len);
-            let name = String::from_utf8(name.to_vec())?;
-
-            match names.entry(name) {
-                Entry::Occupied(entry) => {
-                    bail!(format!("duplicate name entries for '{}'", entry.key()));
-                }
-                Entry::Vacant(entry) => {
-                    entry.insert(index);
-                }
-            }
-
-            bytes = rest;
-        }
-        return Ok(names);
-    }
-
-    return Ok(Default::default());
-}
-
 /// Snip the functions from the input file described by the options.
 pub fn snip(options: Options) -> Result<elements::Module, failure::Error> {
-    let mut module = elements::deserialize_file(&options.input)?;
+    let mut module = elements::deserialize_file(&options.input)?.parse_names().unwrap();
 
     let names = module
-        .sections()
-        .iter()
-        .filter_map(|section| match *section {
-            elements::Section::Custom(ref custom) if custom.name() == "name" => Some(custom),
-            _ => None,
-        })
-        .next()
-        .and_then(|name_section| decode_name_map(name_section.payload()).ok())
+        .names_section_names()
+        .and_then(|name_section| Some(name_section.iter()))
         .ok_or(failure::err_msg("missing \"name\" section"))?;
 
     {
@@ -172,13 +125,12 @@ pub fn snip(options: Options) -> Result<elements::Module, failure::Error> {
             .ok_or(failure::err_msg("missing code section"))?;
 
         for function in &options.functions {
-            let idx = names.get(function).ok_or(failure::err_msg(format!(
-                "'{}' is not in the name section",
-                function
-            )))?;
+            let (idx, _) = names
+                .find(|&(_, name)| name == function)
+                .unwrap();
 
             let mut body = code.bodies_mut()
-                .get_mut(*idx - num_imports)
+                .get_mut(idx as usize - num_imports)
                 .ok_or(failure::err_msg(format!(
                     "index for '{}' is out of bounds of the code section",
                     function
@@ -190,4 +142,20 @@ pub fn snip(options: Options) -> Result<elements::Module, failure::Error> {
     }
 
     Ok(module)
+}
+
+trait NamesSectionNames {
+    fn names_section_names(&self) -> Option<&elements::NameMap>;
+}
+
+impl NamesSectionNames for elements::Module {
+    fn names_section_names(&self) -> Option<&elements::NameMap> {
+        for section in self.sections() {
+            if let &elements::Section::Name(elements::NameSection::Function(ref name_section)) = section {
+                return Some(name_section.names());
+            }
+        }
+
+        None
+    }
 }
