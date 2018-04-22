@@ -79,12 +79,10 @@ dual licensed as above, without any additional terms or conditions.
 #![deny(missing_docs)]
 #![deny(missing_debug_implementations)]
 
-#[macro_use]
 extern crate failure;
 extern crate parity_wasm;
 
 use parity_wasm::elements;
-use std::collections::hash_map::{Entry, HashMap};
 use std::path;
 
 /// Options for controlling which functions in what `.wasm` file should be
@@ -98,15 +96,12 @@ pub struct Options {
     pub functions: Vec<String>,
 }
 
-const FUNCTION_NAMES: u8 = 1;
-
 /// Snip the functions from the input file described by the options.
 pub fn snip(options: Options) -> Result<elements::Module, failure::Error> {
     let mut module = elements::deserialize_file(&options.input)?.parse_names().unwrap();
 
     let names = module
         .names_section_names()
-        .and_then(|name_section| Some(name_section.iter()))
         .ok_or(failure::err_msg("missing \"name\" section"))?;
 
     {
@@ -126,6 +121,7 @@ pub fn snip(options: Options) -> Result<elements::Module, failure::Error> {
 
         for function in &options.functions {
             let (idx, _) = names
+                .iter()
                 .find(|&(_, name)| name == function)
                 .unwrap();
 
@@ -145,14 +141,14 @@ pub fn snip(options: Options) -> Result<elements::Module, failure::Error> {
 }
 
 trait NamesSectionNames {
-    fn names_section_names(&self) -> Option<&elements::NameMap>;
+    fn names_section_names(&self) -> Option<elements::NameMap>;
 }
 
 impl NamesSectionNames for elements::Module {
-    fn names_section_names(&self) -> Option<&elements::NameMap> {
+    fn names_section_names(&self) -> Option<elements::NameMap> {
         for section in self.sections() {
             if let &elements::Section::Name(elements::NameSection::Function(ref name_section)) = section {
-                return Some(name_section.names());
+                return Some(name_section.names().clone());
             }
         }
 
