@@ -105,9 +105,7 @@ pub fn snip(options: Options) -> Result<elements::Module, failure::Error> {
         .ok_or(failure::err_msg("missing \"name\" section"))?;
 
     {
-        let num_imports = module
-            .import_section()
-            .map_or(0, |imports| imports.entries().len());
+        let num_imports = module.import_count(elements::ImportCountType::Function);
 
         let code = module
             .sections_mut()
