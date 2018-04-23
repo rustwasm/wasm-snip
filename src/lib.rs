@@ -79,10 +79,12 @@ dual licensed as above, without any additional terms or conditions.
 #![deny(missing_docs)]
 #![deny(missing_debug_implementations)]
 
+#[macro_use]
 extern crate failure;
 extern crate parity_wasm;
 
 use parity_wasm::elements;
+use std::collections::HashMap;
 use std::path;
 
 /// Options for controlling which functions in what `.wasm` file should be
@@ -98,16 +100,21 @@ pub struct Options {
 
 /// Snip the functions from the input file described by the options.
 pub fn snip(options: Options) -> Result<elements::Module, failure::Error> {
-    let mut module = elements::deserialize_file(&options.input)?.parse_names().unwrap();
+    let mut module = elements::deserialize_file(&options.input)?
+        .parse_names()
+        .unwrap();
 
-    let names = module
+    let names: HashMap<String, u32> = module
         .names_section_names()
-        .ok_or(failure::err_msg("missing \"name\" section"))?;
+        .ok_or(failure::err_msg(
+            "missing \"name\" section; did you build with debug symbols?",
+        ))?
+        .into_iter()
+        .map(|(index, name)| (name, index))
+        .collect();
 
     {
-        let num_imports = module
-            .import_section()
-            .map_or(0, |imports| imports.entries().len());
+        let num_imports = module.import_count(elements::ImportCountType::Function);
 
         let code = module
             .sections_mut()
@@ -119,17 +126,17 @@ pub fn snip(options: Options) -> Result<elements::Module, failure::Error> {
             .next()
             .ok_or(failure::err_msg("missing code section"))?;
 
-        for function in &options.functions {
-            let (idx, _) = names
-                .iter()
-                .find(|&(_, name)| name == function)
-                .unwrap();
+        for to_snip in &options.functions {
+            let idx = names.get(to_snip).ok_or(format_err!(
+                "asked to snip '{}', but it isn't present",
+                to_snip
+            ))?;
 
             let mut body = code.bodies_mut()
-                .get_mut(idx as usize - num_imports)
+                .get_mut(*idx as usize - num_imports)
                 .ok_or(failure::err_msg(format!(
                     "index for '{}' is out of bounds of the code section",
-                    function
+                    to_snip
                 )))?;
 
             *body.code_mut().elements_mut() =
@@ -147,7 +154,9 @@ trait NamesSectionNames {
 impl NamesSectionNames for elements::Module {
     fn names_section_names(&self) -> Option<elements::NameMap> {
         for section in self.sections() {
-            if let &elements::Section::Name(elements::NameSection::Function(ref name_section)) = section {
+            if let &elements::Section::Name(elements::NameSection::Function(ref name_section)) =
+                section
+            {
                 return Some(name_section.names().clone());
             }
         }
