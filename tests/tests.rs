@@ -144,3 +144,44 @@ fn snip_rust_fmt_code() {
         panic!("`--snip-rust-fmt-code` did not result in expected wasm file");
     }
 }
+
+#[test]
+fn snip_rust_panicking_code() {
+    let status = Command::new("cargo")
+        .args(&["run", "--", "-o"])
+        .arg(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/no_panicking_actual.wasm"
+        ))
+        .arg(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/hello.wasm"))
+        .arg("--snip-rust-panicking-code")
+        .status()
+        .unwrap();
+    assert!(status.success());
+
+    let expected = {
+        let mut file = File::open(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/no_panicking_expected.wasm"
+        )).expect("should open no_panicking_expected.wasm file");
+        let mut e = Vec::new();
+        file.read_to_end(&mut e)
+            .expect("should read contents of file to vec");
+        e
+    };
+
+    let actual = {
+        let mut file = File::open(concat!(
+            env!("CARGO_MANIFEST_DIR"),
+            "/tests/no_panicking_actual.wasm"
+        )).expect("should open no_panicking_actual.wasm file");
+        let mut a = Vec::new();
+        file.read_to_end(&mut a)
+            .expect("should read contents of file to vec");
+        a
+    };
+
+    if actual != expected {
+        panic!("`--snip-rust-panicking-code` did not result in expected wasm file");
+    }
+}

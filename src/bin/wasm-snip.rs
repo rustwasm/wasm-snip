@@ -40,6 +40,10 @@ fn try_main() -> Result<(), failure::Error> {
         opts.snip_rust_fmt_code = true;
     }
 
+    if matches.is_present("snip_rust_panicking_code") {
+        opts.snip_rust_panicking_code = true;
+    }
+
     let module = wasm_snip::snip(opts)?;
 
     if let Some(output) = matches.value_of("output") {
@@ -102,6 +106,12 @@ Very helpful when shrinking the size of WebAssembly binaries!
                 .required(false)
                 .long("snip-rust-fmt-code")
                 .help("Snip Rust's `std::fmt` and `core::fmt` code."),
+        )
+        .arg(
+            clap::Arg::with_name("snip_rust_panicking_code")
+                .required(false)
+                .long("snip-rust-panicking-code")
+                .help("Snip Rust's `std::panicking` and `core::panicking` code."),
         )
         .get_matches()
 }

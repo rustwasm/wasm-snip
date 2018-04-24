@@ -44,12 +44,13 @@ $ wasm-snip --help
 Replace a wasm function with an `unreachable`.
 
 USAGE:
-wasm-snip [OPTIONS] <input> [--] [function]...
+wasm-snip [FLAGS] [OPTIONS] <input> [--] [function]...
 
 FLAGS:
--h, --help                  Prints help information
-    --snip-rust-fmt-code    Snip Rust's `std::fmt` and `core::fmt` code.
--V, --version               Prints version information
+-h, --help                        Prints help information
+--snip-rust-fmt-code          Snip Rust's `std::fmt` and `core::fmt` code.
+--snip-rust-panicking-code    Snip Rust's `std::panicking` and `core::panicking` code.
+-V, --version                     Prints version information
 
 OPTIONS:
 -o, --output <output>         The path to write the output wasm file to. Defaults to stdout.
@@ -125,6 +126,9 @@ pub struct Options {
 
     /// Should Rust `std::fmt` and `core::fmt` functions be snipped?
     pub snip_rust_fmt_code: bool,
+
+    /// Should Rust `std::panicking` and `core::panicking` functions be snipped?
+    pub snip_rust_panicking_code: bool,
 }
 
 /// Snip the functions from the input file described by the options.
@@ -181,6 +185,21 @@ pub fn snip(options: Options) -> Result<elements::Module, failure::Error> {
             // Demangled symbols.
             options.patterns.push(".*core::fmt::.*".into());
             options.patterns.push(".*std::fmt::.*".into());
+        }
+
+        // Snip the Rust `panicking` code, if requested.
+        if options.snip_rust_panicking_code {
+            // Mangled symbols.
+            options.patterns.push(".*4core9panicking.*".into());
+            options.patterns.push(".*3std9panicking.*".into());
+
+            // Mangled in impl.
+            options.patterns.push(r#".*core\.\.panicking\.\..*"#.into());
+            options.patterns.push(r#".*std\.\.panicking\.\..*"#.into());
+
+            // Demangled symbols.
+            options.patterns.push(".*core::panicking::.*".into());
+            options.patterns.push(".*std::panicking::.*".into());
         }
 
         let re_set = regex::RegexSet::new(options.patterns)?;
