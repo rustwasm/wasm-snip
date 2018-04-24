@@ -1,4 +1,5 @@
 /tests/no_alloc_actual.wasm
+/tests/no_fmt_actual.wasm
 /tests/snipped.wasm
 /target/
 **/*.rs.bk

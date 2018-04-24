@@ -47,8 +47,9 @@ USAGE:
 wasm-snip [OPTIONS] <input> [--] [function]...
 
 FLAGS:
--h, --help       Prints help information
--V, --version    Prints version information
+-h, --help                  Prints help information
+    --snip-rust-fmt-code    Snip Rust's `std::fmt` and `core::fmt` code.
+-V, --version               Prints version information
 
 OPTIONS:
 -o, --output <output>         The path to write the output wasm file to. Defaults to stdout.

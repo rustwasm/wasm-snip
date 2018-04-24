@@ -23,15 +23,22 @@ fn try_main() -> Result<(), failure::Error> {
     let matches = parse_args();
 
     let mut opts = wasm_snip::Options::default();
+
     opts.input = path::PathBuf::from(matches.value_of("input").unwrap());
+
     opts.functions = matches
         .values_of("function")
         .map(|fs| fs.map(|f| f.to_string()).collect())
         .unwrap_or(vec![]);
+
     opts.patterns = matches
         .values_of("pattern")
         .map(|ps| ps.map(|p| p.to_string()).collect())
         .unwrap_or(vec![]);
+
+    if matches.is_present("snip_rust_fmt_code") {
+        opts.snip_rust_fmt_code = true;
+    }
 
     let module = wasm_snip::snip(opts)?;
 
@@ -89,6 +96,12 @@ Very helpful when shrinking the size of WebAssembly binaries!
                 .long("pattern")
                 .takes_value(true)
                 .help("Snip any function that matches the given regular expression."),
+        )
+        .arg(
+            clap::Arg::with_name("snip_rust_fmt_code")
+                .required(false)
+                .long("snip-rust-fmt-code")
+                .help("Snip Rust's `std::fmt` and `core::fmt` code."),
         )
         .get_matches()
 }

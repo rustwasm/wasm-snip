@@ -47,8 +47,9 @@ USAGE:
 wasm-snip [OPTIONS] <input> [--] [function]...
 
 FLAGS:
--h, --help       Prints help information
--V, --version    Prints version information
+-h, --help                  Prints help information
+    --snip-rust-fmt-code    Snip Rust's `std::fmt` and `core::fmt` code.
+-V, --version               Prints version information
 
 OPTIONS:
 -o, --output <output>         The path to write the output wasm file to. Defaults to stdout.
@@ -121,10 +122,15 @@ pub struct Options {
     /// The regex patterns whose matches should be snipped from the `.wasm`
     /// file.
     pub patterns: Vec<String>,
+
+    /// Should Rust `std::fmt` and `core::fmt` functions be snipped?
+    pub snip_rust_fmt_code: bool,
 }
 
 /// Snip the functions from the input file described by the options.
 pub fn snip(options: Options) -> Result<elements::Module, failure::Error> {
+    let mut options = options;
+
     let mut module = elements::deserialize_file(&options.input)?
         .parse_names()
         .unwrap();
@@ -162,8 +168,23 @@ pub fn snip(options: Options) -> Result<elements::Module, failure::Error> {
                 .with_context(|_| format!("when attempting to snip '{}'", to_snip))?;
         }
 
-        // Snip functions matching any of the supplied regex patterns.
+        // Snip the Rust `fmt` code, if requested.
+        if options.snip_rust_fmt_code {
+            // Mangled symbols.
+            options.patterns.push(".*4core3fmt.*".into());
+            options.patterns.push(".*3std3fmt.*".into());
+
+            // Mangled in impl.
+            options.patterns.push(r#".*core\.\.fmt\.\..*"#.into());
+            options.patterns.push(r#".*std\.\.fmt\.\..*"#.into());
+
+            // Demangled symbols.
+            options.patterns.push(".*core::fmt::.*".into());
+            options.patterns.push(".*std::fmt::.*".into());
+        }
+
         let re_set = regex::RegexSet::new(options.patterns)?;
+
         for (name, idx) in names {
             if idx >= num_imports && re_set.is_match(&name) {
                 snip_nth(idx, num_imports, code)?;
