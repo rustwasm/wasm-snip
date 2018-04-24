@@ -88,7 +88,7 @@ Very helpful when shrinking the size of WebAssembly binaries!
                 .short("p")
                 .long("pattern")
                 .takes_value(true)
-                .help("Snip any function that  matches the given regular expression."),
+                .help("Snip any function that matches the given regular expression."),
         )
         .get_matches()
 }

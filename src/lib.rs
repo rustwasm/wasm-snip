@@ -38,6 +38,22 @@ For information on using the `wasm-snip` executable, run
 
 ```text
 $ wasm-snip --help
+Replace a wasm function with an `unreachable`.
+
+USAGE:
+wasm-snip [OPTIONS] <input> [--] [function]...
+
+FLAGS:
+-h, --help       Prints help information
+-V, --version    Prints version information
+
+OPTIONS:
+-o, --output <output>         The path to write the output wasm file to. Defaults to stdout.
+-p, --pattern <pattern>...    Snip any function that matches the given regular expression.
+
+ARGS:
+<input>          The input wasm file containing the function(s) to snip.
+<function>...    The specific function(s) to snip. These must match exactly. Use the -p flag for fuzzy matching.
 ```
 
 ## Library
