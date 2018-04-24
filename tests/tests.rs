@@ -41,7 +41,7 @@ fn snip_me() {
 
     let expected = {
         let mut file = File::open(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/expected.wasm"))
-            .expect("should open README.md file");
+            .expect("should open expected.wasm file");
         let mut e = Vec::new();
         file.read_to_end(&mut e)
             .expect("should read contents of file to vec");
@@ -50,7 +50,7 @@ fn snip_me() {
 
     let actual = {
         let mut file = File::open(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/snipped.wasm"))
-            .expect("should open README.md file");
+            .expect("should open snipped.wasm file");
         let mut a = Vec::new();
         file.read_to_end(&mut a)
             .expect("should read contents of file to vec");
@@ -59,5 +59,40 @@ fn snip_me() {
 
     if actual != expected {
         panic!("snipping `snip_me` did not result in expected wasm file");
+    }
+}
+
+#[test]
+fn patterns() {
+    let status = Command::new("cargo")
+        .args(&["run", "--", "-o"])
+        .arg(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/no_alloc_actual.wasm"))
+        .arg(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/hello.wasm"))
+        .arg("-p")
+        .arg(".*alloc.*")
+        .status()
+        .unwrap();
+    assert!(status.success());
+
+    let expected = {
+        let mut file = File::open(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/no_alloc_expected.wasm"))
+            .expect("should open no_alloc_expected.wasm file");
+        let mut e = Vec::new();
+        file.read_to_end(&mut e)
+            .expect("should read contents of file to vec");
+        e
+    };
+
+    let actual = {
+        let mut file = File::open(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/no_alloc_actual.wasm"))
+            .expect("should open no_alloc_actual.wasm file");
+        let mut a = Vec::new();
+        file.read_to_end(&mut a)
+            .expect("should read contents of file to vec");
+        a
+    };
+
+    if actual != expected {
+        panic!("snipping `.*alloc.*` did not result in expected wasm file");
     }
 }

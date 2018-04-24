@@ -26,9 +26,12 @@ fn try_main() -> Result<(), failure::Error> {
     opts.input = path::PathBuf::from(matches.value_of("input").unwrap());
     opts.functions = matches
         .values_of("function")
-        .unwrap()
-        .map(|f| f.to_string())
-        .collect();
+        .map(|fs| fs.map(|f| f.to_string()).collect())
+        .unwrap_or(vec![]);
+    opts.patterns = matches
+        .values_of("pattern")
+        .map(|ps| ps.map(|p| p.to_string()).collect())
+        .unwrap_or(vec![]);
 
     let module = wasm_snip::snip(opts)?;
 
@@ -74,11 +77,18 @@ Very helpful when shrinking the size of WebAssembly binaries!
                 .required(true)
                 .help("The input wasm file containing the function(s) to snip."),
         )
+        .arg(clap::Arg::with_name("function").multiple(true).help(
+            "The specific function(s) to snip. These must match \
+             exactly. Use the -p flag for fuzzy matching.",
+        ))
         .arg(
-            clap::Arg::with_name("function")
-                .required(true)
+            clap::Arg::with_name("pattern")
+                .required(false)
                 .multiple(true)
-                .help("The function(s) to snip."),
+                .short("p")
+                .long("pattern")
+                .takes_value(true)
+                .help("Snip any function that  matches the given regular expression."),
         )
         .get_matches()
 }
