@@ -23,12 +23,26 @@ fn try_main() -> Result<(), failure::Error> {
     let matches = parse_args();
 
     let mut opts = wasm_snip::Options::default();
+
     opts.input = path::PathBuf::from(matches.value_of("input").unwrap());
+
     opts.functions = matches
         .values_of("function")
-        .unwrap()
-        .map(|f| f.to_string())
-        .collect();
+        .map(|fs| fs.map(|f| f.to_string()).collect())
+        .unwrap_or(vec![]);
+
+    opts.patterns = matches
+        .values_of("pattern")
+        .map(|ps| ps.map(|p| p.to_string()).collect())
+        .unwrap_or(vec![]);
+
+    if matches.is_present("snip_rust_fmt_code") {
+        opts.snip_rust_fmt_code = true;
+    }
+
+    if matches.is_present("snip_rust_panicking_code") {
+        opts.snip_rust_panicking_code = true;
+    }
 
     let module = wasm_snip::snip(opts)?;
 
@@ -74,11 +88,30 @@ Very helpful when shrinking the size of WebAssembly binaries!
                 .required(true)
                 .help("The input wasm file containing the function(s) to snip."),
         )
+        .arg(clap::Arg::with_name("function").multiple(true).help(
+            "The specific function(s) to snip. These must match \
+             exactly. Use the -p flag for fuzzy matching.",
+        ))
         .arg(
-            clap::Arg::with_name("function")
-                .required(true)
+            clap::Arg::with_name("pattern")
+                .required(false)
                 .multiple(true)
-                .help("The function(s) to snip."),
+                .short("p")
+                .long("pattern")
+                .takes_value(true)
+                .help("Snip any function that matches the given regular expression."),
+        )
+        .arg(
+            clap::Arg::with_name("snip_rust_fmt_code")
+                .required(false)
+                .long("snip-rust-fmt-code")
+                .help("Snip Rust's `std::fmt` and `core::fmt` code."),
+        )
+        .arg(
+            clap::Arg::with_name("snip_rust_panicking_code")
+                .required(false)
+                .long("snip-rust-panicking-code")
+                .help("Snip Rust's `std::panicking` and `core::panicking` code."),
         )
         .get_matches()
 }

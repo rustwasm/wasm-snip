@@ -1,6 +1,9 @@
 # `wasm-snip`
 
-[![](https://docs.rs/wasm-snip/badge.svg)](https://docs.rs/wasm-snip/) [![](https://img.shields.io/crates/v/wasm-snip.svg)](https://crates.io/crates/wasm-snip) [![](https://img.shields.io/crates/d/wasm-snip.png)](https://crates.io/crates/wasm-snip) [![Build Status](https://travis-ci.org/fitzgen/wasm-snip.png?branch=master)](https://travis-ci.org/fitzgen/wasm-snip)
+[![](https://docs.rs/wasm-snip/badge.svg)](https://docs.rs/wasm-snip/)
+[![](https://img.shields.io/crates/v/wasm-snip.svg)](https://crates.io/crates/wasm-snip)
+[![](https://img.shields.io/crates/d/wasm-snip.png)](https://crates.io/crates/wasm-snip)
+[![Build Status](https://travis-ci.org/fitzgen/wasm-snip.png?branch=master)](https://travis-ci.org/fitzgen/wasm-snip)
 
 `wasm-snip` replaces a WebAssembly function's body with an `unreachable`.
 
@@ -38,6 +41,24 @@ For information on using the `wasm-snip` executable, run
 
 ```
 $ wasm-snip --help
+Replace a wasm function with an `unreachable`.
+
+USAGE:
+wasm-snip [FLAGS] [OPTIONS] <input> [--] [function]...
+
+FLAGS:
+-h, --help                        Prints help information
+--snip-rust-fmt-code          Snip Rust's `std::fmt` and `core::fmt` code.
+--snip-rust-panicking-code    Snip Rust's `std::panicking` and `core::panicking` code.
+-V, --version                     Prints version information
+
+OPTIONS:
+-o, --output <output>         The path to write the output wasm file to. Defaults to stdout.
+-p, --pattern <pattern>...    Snip any function that matches the given regular expression.
+
+ARGS:
+<input>          The input wasm file containing the function(s) to snip.
+<function>...    The specific function(s) to snip. These must match exactly. Use the -p flag for fuzzy matching.
 ```
 
 ### Library

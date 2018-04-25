@@ -1,6 +1,9 @@
 /*!
 
-[![](https://docs.rs/wasm-snip/badge.svg)](https://docs.rs/wasm-snip/) [![](https://img.shields.io/crates/v/wasm-snip.svg)](https://crates.io/crates/wasm-snip) [![](https://img.shields.io/crates/d/wasm-snip.png)](https://crates.io/crates/wasm-snip) [![Build Status](https://travis-ci.org/fitzgen/wasm-snip.png?branch=master)](https://travis-ci.org/fitzgen/wasm-snip)
+[![](https://docs.rs/wasm-snip/badge.svg)](https://docs.rs/wasm-snip/)
+[![](https://img.shields.io/crates/v/wasm-snip.svg)](https://crates.io/crates/wasm-snip)
+[![](https://img.shields.io/crates/d/wasm-snip.png)](https://crates.io/crates/wasm-snip)
+[![Build Status](https://travis-ci.org/fitzgen/wasm-snip.png?branch=master)](https://travis-ci.org/fitzgen/wasm-snip)
 
 `wasm-snip` replaces a WebAssembly function's body with an `unreachable`.
 
@@ -38,6 +41,24 @@ For information on using the `wasm-snip` executable, run
 
 ```text
 $ wasm-snip --help
+Replace a wasm function with an `unreachable`.
+
+USAGE:
+wasm-snip [FLAGS] [OPTIONS] <input> [--] [function]...
+
+FLAGS:
+-h, --help                        Prints help information
+--snip-rust-fmt-code          Snip Rust's `std::fmt` and `core::fmt` code.
+--snip-rust-panicking-code    Snip Rust's `std::panicking` and `core::panicking` code.
+-V, --version                     Prints version information
+
+OPTIONS:
+-o, --output <output>         The path to write the output wasm file to. Defaults to stdout.
+-p, --pattern <pattern>...    Snip any function that matches the given regular expression.
+
+ARGS:
+<input>          The input wasm file containing the function(s) to snip.
+<function>...    The specific function(s) to snip. These must match exactly. Use the -p flag for fuzzy matching.
 ```
 
 ## Library
@@ -82,7 +103,9 @@ dual licensed as above, without any additional terms or conditions.
 #[macro_use]
 extern crate failure;
 extern crate parity_wasm;
+extern crate regex;
 
+use failure::ResultExt;
 use parity_wasm::elements;
 use std::collections::HashMap;
 use std::path;
@@ -96,21 +119,33 @@ pub struct Options {
 
     /// The functions that should be snipped from the `.wasm` file.
     pub functions: Vec<String>,
+
+    /// The regex patterns whose matches should be snipped from the `.wasm`
+    /// file.
+    pub patterns: Vec<String>,
+
+    /// Should Rust `std::fmt` and `core::fmt` functions be snipped?
+    pub snip_rust_fmt_code: bool,
+
+    /// Should Rust `std::panicking` and `core::panicking` functions be snipped?
+    pub snip_rust_panicking_code: bool,
 }
 
 /// Snip the functions from the input file described by the options.
 pub fn snip(options: Options) -> Result<elements::Module, failure::Error> {
+    let mut options = options;
+
     let mut module = elements::deserialize_file(&options.input)?
         .parse_names()
         .unwrap();
 
-    let names: HashMap<String, u32> = module
+    let names: HashMap<String, usize> = module
         .names_section_names()
         .ok_or(failure::err_msg(
             "missing \"name\" section; did you build with debug symbols?",
         ))?
         .into_iter()
-        .map(|(index, name)| (name, index))
+        .map(|(index, name)| (name, index as usize))
         .collect();
 
     {
@@ -126,25 +161,78 @@ pub fn snip(options: Options) -> Result<elements::Module, failure::Error> {
             .next()
             .ok_or(failure::err_msg("missing code section"))?;
 
+        // Snip the exact match functions.
         for to_snip in &options.functions {
             let idx = names.get(to_snip).ok_or(format_err!(
                 "asked to snip '{}', but it isn't present",
                 to_snip
             ))?;
 
-            let mut body = code.bodies_mut()
-                .get_mut(*idx as usize - num_imports)
-                .ok_or(failure::err_msg(format!(
-                    "index for '{}' is out of bounds of the code section",
-                    to_snip
-                )))?;
+            snip_nth(*idx, num_imports, code)
+                .with_context(|_| format!("when attempting to snip '{}'", to_snip))?;
+        }
 
-            *body.code_mut().elements_mut() =
-                vec![elements::Opcode::Unreachable, elements::Opcode::End];
+        // Snip the Rust `fmt` code, if requested.
+        if options.snip_rust_fmt_code {
+            // Mangled symbols.
+            options.patterns.push(".*4core3fmt.*".into());
+            options.patterns.push(".*3std3fmt.*".into());
+
+            // Mangled in impl.
+            options.patterns.push(r#".*core\.\.fmt\.\..*"#.into());
+            options.patterns.push(r#".*std\.\.fmt\.\..*"#.into());
+
+            // Demangled symbols.
+            options.patterns.push(".*core::fmt::.*".into());
+            options.patterns.push(".*std::fmt::.*".into());
+        }
+
+        // Snip the Rust `panicking` code, if requested.
+        if options.snip_rust_panicking_code {
+            // Mangled symbols.
+            options.patterns.push(".*4core9panicking.*".into());
+            options.patterns.push(".*3std9panicking.*".into());
+
+            // Mangled in impl.
+            options.patterns.push(r#".*core\.\.panicking\.\..*"#.into());
+            options.patterns.push(r#".*std\.\.panicking\.\..*"#.into());
+
+            // Demangled symbols.
+            options.patterns.push(".*core::panicking::.*".into());
+            options.patterns.push(".*std::panicking::.*".into());
+        }
+
+        let re_set = regex::RegexSet::new(options.patterns)?;
+
+        for (name, idx) in names {
+            if idx >= num_imports && re_set.is_match(&name) {
+                snip_nth(idx, num_imports, code)?;
+            }
         }
     }
 
     Ok(module)
+}
+
+fn snip_nth(
+    n: usize,
+    num_imports: usize,
+    code: &mut elements::CodeSection,
+) -> Result<(), failure::Error> {
+    if n < num_imports {
+        bail!("cannot snip imported functions");
+    }
+
+    let body = code.bodies_mut()
+        .get_mut(n - num_imports)
+        .ok_or(failure::err_msg(format!(
+            "index {} is out of bounds of the code section",
+            n - num_imports
+        )))?;
+
+    *body.code_mut().elements_mut() = vec![elements::Opcode::Unreachable, elements::Opcode::End];
+
+    Ok(())
 }
 
 trait NamesSectionNames {

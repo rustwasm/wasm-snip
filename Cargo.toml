@@ -1,7 +1,14 @@
 [package]
 authors = ["Nick Fitzgerald <fitzgen@gmail.com>"]
+categories = ["wasm"]
 description = "Replace a wasm function with an `unreachable`."
-keywords = ["symbol", "wasm", "snip", "size", "profiling"]
+keywords = [
+    "symbol",
+    "webassembly",
+    "snip",
+    "size",
+    "profiling",
+]
 license = "Apache-2.0/MIT"
 name = "wasm-snip"
 readme = "./README.md"
@@ -17,6 +24,7 @@ required-features = ["exe"]
 [dependencies]
 failure = "0.1.1"
 parity-wasm = "0.27.0"
+regex = "0.2.10"
 
 [dependencies.clap]
 optional = true
