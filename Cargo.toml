@@ -13,7 +13,7 @@ license = "Apache-2.0/MIT"
 name = "wasm-snip"
 readme = "./README.md"
 repository = "https://github.com/fitzgen/wasm-snip"
-version = "0.1.2"
+version = "0.1.3"
 
 [[bin]]
 doc = false
