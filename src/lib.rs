@@ -40,7 +40,7 @@ $ cargo install wasm-snip
 You can use `wasm-snip` to remove the `annoying_space_waster`
 function from `input.wasm` and put the new binary in `output.wasm` like this:
 
-```
+```text
 $ wasm-snip input.wasm -o output.wasm annoying_space_waster
 ```
 
