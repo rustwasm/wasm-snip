@@ -3,7 +3,7 @@
 [![](https://docs.rs/wasm-snip/badge.svg)](https://docs.rs/wasm-snip/)
 [![](https://img.shields.io/crates/v/wasm-snip.svg)](https://crates.io/crates/wasm-snip)
 [![](https://img.shields.io/crates/d/wasm-snip.png)](https://crates.io/crates/wasm-snip)
-[![Build Status](https://travis-ci.org/fitzgen/wasm-snip.png?branch=master)](https://travis-ci.org/fitzgen/wasm-snip)
+[![Build Status](https://travis-ci.org/rustwasm/wasm-snip.png?branch=master)](https://travis-ci.org/rustwasm/wasm-snip)
 
 `wasm-snip` replaces a WebAssembly function's body with an `unreachable`.
 
@@ -95,7 +95,7 @@ at your option.
 ## Contributing
 
 See
-[CONTRIBUTING.md](https://github.com/fitzgen/wasm-snip/blob/master/CONTRIBUTING.md)
+[CONTRIBUTING.md](https://github.com/rustwasm/wasm-snip/blob/master/CONTRIBUTING.md)
 for hacking.
 
 Unless you explicitly state otherwise, any contribution intentionally submitted
