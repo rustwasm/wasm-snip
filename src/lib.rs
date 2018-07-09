@@ -237,7 +237,7 @@ fn snip_nth(
             n - num_imports
         )))?;
 
-    *body.code_mut().elements_mut() = vec![elements::Opcode::Unreachable, elements::Opcode::End];
+    *body.code_mut().elements_mut() = vec![elements::Instruction::Unreachable, elements::Instruction::End];
 
     Ok(())
 }
