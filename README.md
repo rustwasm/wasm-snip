@@ -1,5 +1,6 @@
 # `wasm-snip`
 
+
 [![](https://docs.rs/wasm-snip/badge.svg)](https://docs.rs/wasm-snip/)
 [![](https://img.shields.io/crates/v/wasm-snip.svg)](https://crates.io/crates/wasm-snip)
 [![](https://img.shields.io/crates/d/wasm-snip.png)](https://crates.io/crates/wasm-snip)
