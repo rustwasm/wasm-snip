@@ -107,15 +107,12 @@ dual licensed as above, without any additional terms or conditions.
 #![deny(missing_docs)]
 #![deny(missing_debug_implementations)]
 
-#[macro_use]
-extern crate failure;
-extern crate parity_wasm;
-extern crate regex;
-
 use failure::ResultExt;
-use parity_wasm::elements;
+use rayon::prelude::*;
 use std::collections::HashMap;
+use std::collections::HashSet;
 use std::path;
+use walrus::ir::VisitorMut;
 
 /// Options for controlling which functions in what `.wasm` file should be
 /// snipped.
@@ -139,123 +136,210 @@ pub struct Options {
 }
 
 /// Snip the functions from the input file described by the options.
-pub fn snip(options: Options) -> Result<elements::Module, failure::Error> {
-    let mut options = options;
+pub fn snip(options: Options) -> Result<walrus::Module, failure::Error> {
+    let mut module = walrus::Module::from_file(&options.input)
+        .with_context(|_| format!("failed to parse wasm from: {}", options.input.display()))?;
 
-    let mut module = elements::deserialize_file(&options.input)?
-        .parse_names()
-        .unwrap();
+    let names: HashSet<String> = options.functions.iter().cloned().collect();
+    let re_set = build_regex_set(options).context("failed to compile regex")?;
+    let to_snip = find_functions_to_snip(&module, &names, &re_set);
 
-    let names: HashMap<String, usize> = module
-        .names_section_names()
-        .ok_or(failure::err_msg(
-            "missing \"name\" section; did you build with debug symbols?",
-        ))?
-        .into_iter()
-        .map(|(index, name)| (name, index as usize))
-        .collect();
-
-    {
-        let num_imports = module.import_count(elements::ImportCountType::Function);
-
-        let code = module
-            .sections_mut()
-            .iter_mut()
-            .filter_map(|section| match *section {
-                elements::Section::Code(ref mut code) => Some(code),
-                _ => None,
-            })
-            .next()
-            .ok_or(failure::err_msg("missing code section"))?;
-
-        // Snip the exact match functions.
-        for to_snip in &options.functions {
-            let idx = names.get(to_snip).ok_or(format_err!(
-                "asked to snip '{}', but it isn't present",
-                to_snip
-            ))?;
-
-            snip_nth(*idx, num_imports, code)
-                .with_context(|_| format!("when attempting to snip '{}'", to_snip))?;
-        }
-
-        // Snip the Rust `fmt` code, if requested.
-        if options.snip_rust_fmt_code {
-            // Mangled symbols.
-            options.patterns.push(".*4core3fmt.*".into());
-            options.patterns.push(".*3std3fmt.*".into());
-
-            // Mangled in impl.
-            options.patterns.push(r#".*core\.\.fmt\.\..*"#.into());
-            options.patterns.push(r#".*std\.\.fmt\.\..*"#.into());
-
-            // Demangled symbols.
-            options.patterns.push(".*core::fmt::.*".into());
-            options.patterns.push(".*std::fmt::.*".into());
-        }
-
-        // Snip the Rust `panicking` code, if requested.
-        if options.snip_rust_panicking_code {
-            // Mangled symbols.
-            options.patterns.push(".*4core9panicking.*".into());
-            options.patterns.push(".*3std9panicking.*".into());
-
-            // Mangled in impl.
-            options.patterns.push(r#".*core\.\.panicking\.\..*"#.into());
-            options.patterns.push(r#".*std\.\.panicking\.\..*"#.into());
-
-            // Demangled symbols.
-            options.patterns.push(".*core::panicking::.*".into());
-            options.patterns.push(".*std::panicking::.*".into());
-        }
-
-        let re_set = regex::RegexSet::new(options.patterns)?;
-
-        for (name, idx) in names {
-            if idx >= num_imports && re_set.is_match(&name) {
-                snip_nth(idx, num_imports, code)?;
-            }
-        }
-    }
+    replace_calls_with_unreachable(&mut module, &to_snip);
+    unexport_snipped_functions(&mut module, &to_snip);
+    unimport_snipped_functions(&mut module, &to_snip);
+    snip_table_elements(&mut module, &to_snip);
+    delete_functions_to_snip(&mut module, &to_snip);
 
     Ok(module)
 }
 
-fn snip_nth(
-    n: usize,
-    num_imports: usize,
-    code: &mut elements::CodeSection,
-) -> Result<(), failure::Error> {
-    if n < num_imports {
-        bail!("cannot snip imported functions");
+fn build_regex_set(mut options: Options) -> Result<regex::RegexSet, failure::Error> {
+    // Snip the Rust `fmt` code, if requested.
+    if options.snip_rust_fmt_code {
+        // Mangled symbols.
+        options.patterns.push(".*4core3fmt.*".into());
+        options.patterns.push(".*3std3fmt.*".into());
+
+        // Mangled in impl.
+        options.patterns.push(r#".*core\.\.fmt\.\..*"#.into());
+        options.patterns.push(r#".*std\.\.fmt\.\..*"#.into());
+
+        // Demangled symbols.
+        options.patterns.push(".*core::fmt::.*".into());
+        options.patterns.push(".*std::fmt::.*".into());
     }
 
-    let body = code.bodies_mut()
-        .get_mut(n - num_imports)
-        .ok_or(failure::err_msg(format!(
-            "index {} is out of bounds of the code section",
-            n - num_imports
-        )))?;
+    // Snip the Rust `panicking` code, if requested.
+    if options.snip_rust_panicking_code {
+        // Mangled symbols.
+        options.patterns.push(".*4core9panicking.*".into());
+        options.patterns.push(".*3std9panicking.*".into());
 
-    *body.code_mut().elements_mut() = vec![elements::Instruction::Unreachable, elements::Instruction::End];
+        // Mangled in impl.
+        options.patterns.push(r#".*core\.\.panicking\.\..*"#.into());
+        options.patterns.push(r#".*std\.\.panicking\.\..*"#.into());
 
-    Ok(())
+        // Demangled symbols.
+        options.patterns.push(".*core::panicking::.*".into());
+        options.patterns.push(".*std::panicking::.*".into());
+    }
+
+    Ok(regex::RegexSet::new(options.patterns)?)
 }
 
-trait NamesSectionNames {
-    fn names_section_names(&self) -> Option<elements::NameMap>;
+fn find_functions_to_snip(
+    module: &walrus::Module,
+    names: &HashSet<String>,
+    re_set: &regex::RegexSet,
+) -> HashSet<walrus::FunctionId> {
+    module
+        .funcs
+        .par_iter()
+        .filter_map(|f| {
+            f.name.as_ref().and_then(|name| {
+                if names.contains(name) || re_set.is_match(name) {
+                    Some(f.id())
+                } else {
+                    None
+                }
+            })
+        })
+        .collect()
 }
 
-impl NamesSectionNames for elements::Module {
-    fn names_section_names(&self) -> Option<elements::NameMap> {
-        for section in self.sections() {
-            if let &elements::Section::Name(elements::NameSection::Function(ref name_section)) =
-                section
-            {
-                return Some(name_section.names().clone());
+fn delete_functions_to_snip(module: &mut walrus::Module, to_snip: &HashSet<walrus::FunctionId>) {
+    for f in to_snip.iter().cloned() {
+        module.funcs.delete(f);
+    }
+}
+
+fn replace_calls_with_unreachable(
+    module: &mut walrus::Module,
+    to_snip: &HashSet<walrus::FunctionId>,
+) {
+    struct Replacer<'a> {
+        func: &'a mut walrus::LocalFunction,
+        to_snip: &'a HashSet<walrus::FunctionId>,
+    }
+
+    impl Replacer<'_> {
+        // If `id` is a call to a function we are snipping, return its
+        // arguments. We need to keep the arguments around because they might
+        // perform some visible side effects.
+        fn should_snip_call(&self, id: walrus::ir::ExprId) -> Option<Vec<walrus::ir::ExprId>> {
+            if let walrus::ir::Expr::Call(walrus::ir::Call { func, args }) = self.func.get(id) {
+                if self.to_snip.contains(func) {
+                    return Some(args.iter().cloned().collect());
+                }
             }
+
+            None
+        }
+    }
+
+    impl VisitorMut for Replacer<'_> {
+        fn local_function_mut(&mut self) -> &mut walrus::LocalFunction {
+            self.func
         }
 
-        None
+        fn visit_expr_id_mut(&mut self, expr_id: &mut walrus::ir::ExprId) {
+            use walrus::ir::VisitMut;
+
+            if let Some(args) = self.should_snip_call(*expr_id) {
+                let builder = self.func.builder_mut();
+
+                let mut dropped_args = Vec::with_capacity(args.len());
+                for a in args {
+                    dropped_args.push(builder.drop(a));
+                }
+
+                let unreachable = builder.unreachable();
+                *expr_id = builder.with_side_effects(dropped_args, unreachable, vec![]);
+            }
+
+            (*expr_id).visit_mut(self);
+        }
+    }
+
+    module.funcs.par_iter_local_mut().for_each(|(id, func)| {
+        // Don't bother transforming functions that we are snipping.
+        if to_snip.contains(&id) {
+            return;
+        }
+
+        let mut entry = func.entry_block();
+        let v = &mut Replacer { func, to_snip };
+        v.visit_block_id_mut(&mut entry);
+    });
+}
+
+fn unexport_snipped_functions(module: &mut walrus::Module, to_snip: &HashSet<walrus::FunctionId>) {
+    let exports_to_snip: HashSet<walrus::ExportId> = module
+        .exports
+        .iter()
+        .filter_map(|e| match e.item {
+            walrus::ExportItem::Function(f) if to_snip.contains(&f) => Some(e.id()),
+            _ => None,
+        })
+        .collect();
+
+    for e in exports_to_snip {
+        module.exports.delete(e);
+    }
+}
+
+fn unimport_snipped_functions(module: &mut walrus::Module, to_snip: &HashSet<walrus::FunctionId>) {
+    let imports_to_snip: HashSet<walrus::ImportId> = module
+        .imports
+        .iter()
+        .filter_map(|i| match i.kind {
+            walrus::ImportKind::Function(f) if to_snip.contains(&f) => Some(i.id()),
+            _ => None,
+        })
+        .collect();
+
+    for i in imports_to_snip {
+        module.imports.delete(i);
+    }
+}
+
+fn snip_table_elements(module: &mut walrus::Module, to_snip: &HashSet<walrus::FunctionId>) {
+    let mut unreachable_funcs: HashMap<walrus::TypeId, walrus::FunctionId> = Default::default();
+
+    let make_unreachable_func = |ty: walrus::TypeId,
+                                 types: &mut walrus::ModuleTypes,
+                                 funcs: &mut walrus::ModuleFunctions|
+     -> walrus::FunctionId {
+        let mut builder = walrus::FunctionBuilder::new();
+        let unreachable = builder.unreachable();
+        builder.finish_parts(ty, vec![], vec![unreachable], types, funcs)
+    };
+
+    for t in module.tables.iter_mut() {
+        if let walrus::TableKind::Function(ref mut ft) = t.kind {
+            let types = &mut module.types;
+            let funcs = &mut module.funcs;
+
+            ft.elements
+                .iter_mut()
+                .flat_map(|el| el)
+                .filter(|f| to_snip.contains(f))
+                .for_each(|el| {
+                    let ty = funcs.get(*el).ty();
+                    *el = *unreachable_funcs
+                        .entry(ty)
+                        .or_insert_with(|| make_unreachable_func(ty, types, funcs));
+                });
+
+            ft.relative_elements
+                .iter_mut()
+                .flat_map(|(_, elems)| elems.iter_mut().filter(|f| to_snip.contains(f)))
+                .for_each(|el| {
+                    let ty = funcs.get(*el).ty();
+                    *el = *unreachable_funcs
+                        .entry(ty)
+                        .or_insert_with(|| make_unreachable_func(ty, types, funcs));
+                });
+        }
     }
 }

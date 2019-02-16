@@ -1,5 +1,6 @@
-use std::fs::File;
-use std::io::Read;
+use assert_cmd::prelude::*;
+use std::fs;
+use std::path::Path;
 use std::process::Command;
 
 #[test]
@@ -12,176 +13,69 @@ fn cargo_readme_up_to_date() {
         .output()
         .expect("should run `cargo readme` OK")
         .stdout;
-    let expected = String::from_utf8_lossy(&expected);
+    let expected = String::from_utf8(expected).unwrap();
 
-    let actual = {
-        let mut file = File::open(concat!(env!("CARGO_MANIFEST_DIR"), "/README.md"))
-            .expect("should open README.md file");
-        let mut s = String::new();
-        file.read_to_string(&mut s)
-            .expect("should read contents of file to string");
-        s
-    };
+    let actual = fs::read_to_string(concat!(env!("CARGO_MANIFEST_DIR"), "/README.md"))
+        .expect("should open README.md file");
 
     if actual != expected {
         panic!("Run `cargo readme > README.md` to update README.md");
     }
 }
 
-#[test]
-fn snip_me() {
-    let status = Command::new("cargo")
-        .args(&["run", "--", "-o"])
-        .arg(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/snipped.wasm"))
-        .arg(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/hello.wasm"))
-        .arg("_ZN5hello7snip_me17hf15dbd799e7ad6aaE")
-        .status()
-        .unwrap();
-    assert!(status.success());
+fn assert_snip<P: AsRef<Path>>(cmd: &mut Command, expected_path: P) {
+    let expected_path = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("tests")
+        .join(expected_path);
 
-    let expected = {
-        let mut file = File::open(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/expected.wasm"))
-            .expect("should open expected.wasm file");
-        let mut e = Vec::new();
-        file.read_to_end(&mut e)
-            .expect("should read contents of file to vec");
-        e
-    };
+    let actual_path = expected_path.with_extension("wasm.actual");
 
-    let actual = {
-        let mut file = File::open(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/snipped.wasm"))
-            .expect("should open snipped.wasm file");
-        let mut a = Vec::new();
-        file.read_to_end(&mut a)
-            .expect("should read contents of file to vec");
-        a
-    };
+    cmd.arg("-o").arg(&actual_path).assert().success();
+
+    let expected = fs::read(&expected_path).expect("should open expected wasm file");
+    let actual = fs::read(&actual_path).expect("should open snipped.wasm file");
 
     if actual != expected {
-        panic!("snipping `snip_me` did not result in expected wasm file");
+        panic!(
+            "snipping did not result in expected wasm file: {} != {}",
+            expected_path.display(),
+            actual_path.display(),
+        );
     }
+}
+
+fn wasm_snip() -> Command {
+    let mut cmd = Command::cargo_bin("wasm-snip").unwrap();
+    cmd.arg(
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("tests")
+            .join("hello.wasm"),
+    );
+    cmd
+}
+
+#[test]
+fn snip_me() {
+    assert_snip(
+        wasm_snip().arg("_ZN5hello7snip_me17hf15dbd799e7ad6aaE"),
+        "snip_me.wasm",
+    );
 }
 
 #[test]
 fn patterns() {
-    let status = Command::new("cargo")
-        .args(&["run", "--", "-o"])
-        .arg(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/tests/no_alloc_actual.wasm"
-        ))
-        .arg(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/hello.wasm"))
-        .arg("-p")
-        .arg(".*alloc.*")
-        .status()
-        .unwrap();
-    assert!(status.success());
-
-    let expected = {
-        let mut file = File::open(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/tests/no_alloc_expected.wasm"
-        )).expect("should open no_alloc_expected.wasm file");
-        let mut e = Vec::new();
-        file.read_to_end(&mut e)
-            .expect("should read contents of file to vec");
-        e
-    };
-
-    let actual = {
-        let mut file = File::open(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/tests/no_alloc_actual.wasm"
-        )).expect("should open no_alloc_actual.wasm file");
-        let mut a = Vec::new();
-        file.read_to_end(&mut a)
-            .expect("should read contents of file to vec");
-        a
-    };
-
-    if actual != expected {
-        panic!("snipping `.*alloc.*` did not result in expected wasm file");
-    }
+    assert_snip(wasm_snip().arg("-p").arg(".*alloc.*"), "no_alloc.wasm");
 }
 
 #[test]
 fn snip_rust_fmt_code() {
-    let status = Command::new("cargo")
-        .args(&["run", "--", "-o"])
-        .arg(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/tests/no_fmt_actual.wasm"
-        ))
-        .arg(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/hello.wasm"))
-        .arg("--snip-rust-fmt-code")
-        .status()
-        .unwrap();
-    assert!(status.success());
-
-    let expected = {
-        let mut file = File::open(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/tests/no_fmt_expected.wasm"
-        )).expect("should open no_fmt_expected.wasm file");
-        let mut e = Vec::new();
-        file.read_to_end(&mut e)
-            .expect("should read contents of file to vec");
-        e
-    };
-
-    let actual = {
-        let mut file = File::open(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/tests/no_fmt_actual.wasm"
-        )).expect("should open no_fmt_actual.wasm file");
-        let mut a = Vec::new();
-        file.read_to_end(&mut a)
-            .expect("should read contents of file to vec");
-        a
-    };
-
-    if actual != expected {
-        panic!("`--snip-rust-fmt-code` did not result in expected wasm file");
-    }
+    assert_snip(wasm_snip().arg("--snip-rust-fmt-code"), "no_fmt.wasm");
 }
 
 #[test]
 fn snip_rust_panicking_code() {
-    let status = Command::new("cargo")
-        .args(&["run", "--", "-o"])
-        .arg(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/tests/no_panicking_actual.wasm"
-        ))
-        .arg(concat!(env!("CARGO_MANIFEST_DIR"), "/tests/hello.wasm"))
-        .arg("--snip-rust-panicking-code")
-        .status()
-        .unwrap();
-    assert!(status.success());
-
-    let expected = {
-        let mut file = File::open(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/tests/no_panicking_expected.wasm"
-        )).expect("should open no_panicking_expected.wasm file");
-        let mut e = Vec::new();
-        file.read_to_end(&mut e)
-            .expect("should read contents of file to vec");
-        e
-    };
-
-    let actual = {
-        let mut file = File::open(concat!(
-            env!("CARGO_MANIFEST_DIR"),
-            "/tests/no_panicking_actual.wasm"
-        )).expect("should open no_panicking_actual.wasm file");
-        let mut a = Vec::new();
-        file.read_to_end(&mut a)
-            .expect("should read contents of file to vec");
-        a
-    };
-
-    if actual != expected {
-        panic!("`--snip-rust-panicking-code` did not result in expected wasm file");
-    }
+    assert_snip(
+        wasm_snip().arg("--snip-rust-panicking-code"),
+        "no_panicking.wasm",
+    );
 }

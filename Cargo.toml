@@ -2,6 +2,7 @@
 authors = ["Nick Fitzgerald <fitzgen@gmail.com>"]
 categories = ["wasm"]
 description = "Replace a wasm function with an `unreachable`."
+edition = "2018"
 keywords = [
     "symbol",
     "webassembly",
@@ -22,14 +23,18 @@ path = "src/bin/wasm-snip.rs"
 required-features = ["exe"]
 
 [dependencies]
-failure = "0.1.1"
-parity-wasm = "0.37.0"
-regex = "1.0.1"
+failure = "0.1.5"
+walrus = "0.3.0"
+regex = "1.1.0"
+rayon = "1.0.3"
 
 [dependencies.clap]
 optional = true
-version = "2.29.0"
+version = "2.32.0"
 
 [features]
 default = ["exe"]
 exe = ["clap"]
+
+[dev-dependencies]
+assert_cmd = "0.11.0"
