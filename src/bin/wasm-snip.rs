@@ -1,17 +1,12 @@
-extern crate clap;
-extern crate failure;
-extern crate parity_wasm;
-extern crate wasm_snip;
-
-use parity_wasm::elements::{self, Serialize};
-use std::io;
+use failure::ResultExt;
+use std::io::{self, Write};
 use std::path;
 use std::process;
 
 fn main() {
     if let Err(e) = try_main() {
         eprintln!("error: {}", e);
-        for c in e.causes().skip(1) {
+        for c in e.iter_chain().skip(1) {
             eprintln!("  caused by {}", c);
         }
         eprintln!("{}", e.backtrace());
@@ -44,14 +39,23 @@ fn try_main() -> Result<(), failure::Error> {
         opts.snip_rust_panicking_code = true;
     }
 
-    let module = wasm_snip::snip(opts)?;
+    let module = wasm_snip::snip(opts).context("failed to snip functions from wasm module")?;
 
     if let Some(output) = matches.value_of("output") {
-        elements::serialize_to_file(output, module)?;
+        module
+            .emit_wasm_file(output)
+            .with_context(|_| format!("failed to emit snipped wasm to {}", output))?;
     } else {
+        let wasm = module
+            .emit_wasm()
+            .context("failed to re-compile snipped module to wasm")?;
+
         let stdout = io::stdout();
         let mut stdout = stdout.lock();
-        module.serialize(&mut stdout)?;
+
+        stdout
+            .write_all(&wasm)
+            .context("failed to write wasm to stdout")?;
     }
 
     Ok(())
