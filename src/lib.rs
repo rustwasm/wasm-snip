@@ -149,6 +149,7 @@ pub fn snip(options: Options) -> Result<walrus::Module, failure::Error> {
     unimport_snipped_functions(&mut module, &to_snip);
     snip_table_elements(&mut module, &to_snip);
     delete_functions_to_snip(&mut module, &to_snip);
+    walrus::passes::gc::run(&mut module);
 
     Ok(module)
 }
