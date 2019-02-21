@@ -9,11 +9,9 @@
 `wasm-snip` replaces a WebAssembly function's body with an `unreachable`.
 
 Maybe you know that some function will never be called at runtime, but the
-compiler can't prove that at compile time? Snip it! Then run
-[`wasm-gc`][wasm-gc] again and all the functions it transitively called (which
-could also never be called at runtime) will get removed too.
-
-[wasm-gc]: https://github.com/alexcrichton/wasm-gc
+compiler can't prove that at compile time? Snip it! All the functions it
+transitively called &mdash; which weren't called by anything else and therefore
+could also never be called at runtime &mdash; will get removed too.
 
 Very helpful when shrinking the size of WebAssembly binaries!
 
@@ -49,16 +47,21 @@ For information on using the `wasm-snip` executable, run
 
 ```
 $ wasm-snip --help
+```
+
+And you'll get the most up-to-date help text, like:
+
+```
 Replace a wasm function with an `unreachable`.
 
 USAGE:
 wasm-snip [FLAGS] [OPTIONS] <input> [--] [function]...
 
 FLAGS:
--h, --help                        Prints help information
+-h, --help                    Prints help information
 --snip-rust-fmt-code          Snip Rust's `std::fmt` and `core::fmt` code.
 --snip-rust-panicking-code    Snip Rust's `std::panicking` and `core::panicking` code.
--V, --version                     Prints version information
+-V, --version                 Prints version information
 
 OPTIONS:
 -o, --output <output>         The path to write the output wasm file to. Defaults to stdout.
