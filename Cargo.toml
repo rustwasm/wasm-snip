@@ -24,17 +24,17 @@ required-features = ["exe"]
 
 [dependencies]
 failure = "0.1.5"
-walrus = "0.4.0"
-regex = "1.1.0"
+walrus = "0.6.0"
+regex = "1.1.6"
 rayon = "1.0.3"
 
 [dependencies.clap]
 optional = true
-version = "2.32.0"
+version = "2.33.0"
 
 [features]
 default = ["exe"]
 exe = ["clap"]
 
 [dev-dependencies]
-assert_cmd = "0.11.0"
+assert_cmd = "0.11.1"

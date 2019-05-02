@@ -136,12 +136,24 @@ pub struct Options {
 
     /// Should Rust `std::panicking` and `core::panicking` functions be snipped?
     pub snip_rust_panicking_code: bool,
+
+    /// Should we skip generating [the "producers" custom
+    /// section](https://github.com/WebAssembly/tool-conventions/blob/master/ProducersSection.md)?
+    pub skip_producers_section: bool,
 }
 
 /// Snip the functions from the input file described by the options.
 pub fn snip(options: Options) -> Result<walrus::Module, failure::Error> {
-    let mut module = walrus::Module::from_file(&options.input)
+    let config = walrus_config_from_options(&options);
+    let mut module = config
+        .parse_file(&options.input)
         .with_context(|_| format!("failed to parse wasm from: {}", options.input.display()))?;
+
+    if !options.skip_producers_section {
+        module
+            .producers
+            .add_processed_by("wasm-snip", env!("CARGO_PKG_VERSION"));
+    }
 
     let names: HashSet<String> = options.functions.iter().cloned().collect();
     let re_set = build_regex_set(options).context("failed to compile regex")?;
@@ -155,6 +167,12 @@ pub fn snip(options: Options) -> Result<walrus::Module, failure::Error> {
     walrus::passes::gc::run(&mut module);
 
     Ok(module)
+}
+
+fn walrus_config_from_options(options: &Options) -> walrus::ModuleConfig {
+    let mut config = walrus::ModuleConfig::new();
+    config.generate_producers_section(!options.skip_producers_section);
+    config
 }
 
 fn build_regex_set(mut options: Options) -> Result<regex::RegexSet, failure::Error> {

@@ -39,6 +39,10 @@ fn try_main() -> Result<(), failure::Error> {
         opts.snip_rust_panicking_code = true;
     }
 
+    if matches.is_present("skip_producers_section") {
+        opts.skip_producers_section = true;
+    }
+
     let module = wasm_snip::snip(opts).context("failed to snip functions from wasm module")?;
 
     if let Some(output) = matches.value_of("output") {
@@ -116,6 +120,12 @@ Very helpful when shrinking the size of WebAssembly binaries!
                 .required(false)
                 .long("snip-rust-panicking-code")
                 .help("Snip Rust's `std::panicking` and `core::panicking` code."),
+        )
+        .arg(
+            clap::Arg::with_name("skip_producers_section")
+                .required(false)
+                .long("skip-producers-section")
+                .help("Do not emit the 'producers' custom section.")
         )
         .get_matches()
 }

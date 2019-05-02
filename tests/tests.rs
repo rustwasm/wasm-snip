@@ -30,7 +30,11 @@ fn assert_snip<P: AsRef<Path>>(cmd: &mut Command, expected_path: P) {
 
     let actual_path = expected_path.with_extension("wasm.actual");
 
-    cmd.arg("-o").arg(&actual_path).assert().success();
+    cmd.arg("--skip-producers-section")
+        .arg("-o")
+        .arg(&actual_path)
+        .assert()
+        .success();
 
     let expected = fs::read(&expected_path).expect("should open expected wasm file");
     let actual = fs::read(&actual_path).expect("should open snipped.wasm file");
