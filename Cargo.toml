@@ -24,7 +24,7 @@ required-features = ["exe"]
 
 [dependencies]
 failure = "0.1.5"
-walrus = "0.6.0"
+walrus = "0.7.0"
 regex = "1.1.6"
 rayon = "1.0.3"
 
