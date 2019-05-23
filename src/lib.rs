@@ -1,10 +1,5 @@
 /*!
 
-[![](https://docs.rs/wasm-snip/badge.svg)](https://docs.rs/wasm-snip/)
-[![](https://img.shields.io/crates/v/wasm-snip.svg)](https://crates.io/crates/wasm-snip)
-[![](https://img.shields.io/crates/d/wasm-snip.png)](https://crates.io/crates/wasm-snip)
-[![Build Status](https://travis-ci.org/rustwasm/wasm-snip.png?branch=master)](https://travis-ci.org/rustwasm/wasm-snip)
-
 `wasm-snip` replaces a WebAssembly function's body with an `unreachable`.
 
 Maybe you know that some function will never be called at runtime, but the
