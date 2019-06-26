@@ -112,12 +112,29 @@ use std::collections::HashSet;
 use std::path;
 use walrus::ir::VisitorMut;
 
+/// Input configuration.
+#[derive(Clone, Debug)]
+pub enum Input {
+    /// The input `.wasm` file that should have its function snipped.
+    File(path::PathBuf),
+    /// The input WebAssembly blob that should have its function snipped.
+    Buffer(Vec<u8>),
+    // TODO: Support Walrus module directly.
+    // Module(walrus::Module),
+}
+
+impl Default for Input {
+    fn default() -> Self {
+        Input::File(path::PathBuf::default())
+    }
+}
+
 /// Options for controlling which functions in what `.wasm` file should be
 /// snipped.
 #[derive(Clone, Debug, Default)]
 pub struct Options {
-    /// The input `.wasm` file that should have its functions snipped.
-    pub input: path::PathBuf,
+    /// The input which should have its functions snipped.
+    pub input: Input,
 
     /// The functions that should be snipped from the `.wasm` file.
     pub functions: Vec<String>,
@@ -140,9 +157,14 @@ pub struct Options {
 /// Snip the functions from the input file described by the options.
 pub fn snip(options: Options) -> Result<walrus::Module, failure::Error> {
     let config = walrus_config_from_options(&options);
-    let mut module = config
-        .parse_file(&options.input)
-        .with_context(|_| format!("failed to parse wasm from: {}", options.input.display()))?;
+    let mut module = match options.input {
+        Input::File(ref path) => config
+            .parse_file(&path)
+            .with_context(|_| format!("failed to parse wasm from: {}", path.display()))?,
+        Input::Buffer(ref wasm) => config
+            .parse(&wasm)
+            .with_context(|_| "failed to parse supplied wasm blob")?,
+    };
 
     if !options.skip_producers_section {
         module
