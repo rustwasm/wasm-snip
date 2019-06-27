@@ -19,7 +19,7 @@ fn try_main() -> Result<(), failure::Error> {
 
     let mut opts = wasm_snip::Options::default();
 
-    opts.input = path::PathBuf::from(matches.value_of("input").unwrap());
+    opts.input = wasm_snip::Input::File(path::PathBuf::from(matches.value_of("input").unwrap()));
 
     opts.functions = matches
         .values_of("function")
@@ -125,7 +125,7 @@ Very helpful when shrinking the size of WebAssembly binaries!
             clap::Arg::with_name("skip_producers_section")
                 .required(false)
                 .long("skip-producers-section")
-                .help("Do not emit the 'producers' custom section.")
+                .help("Do not emit the 'producers' custom section."),
         )
         .get_matches()
 }
