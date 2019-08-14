@@ -1,6 +1,6 @@
 use failure::ResultExt;
+use std::fs;
 use std::io::{self, Write};
-use std::path;
 use std::process;
 
 fn main() {
@@ -18,8 +18,6 @@ fn try_main() -> Result<(), failure::Error> {
     let matches = parse_args();
 
     let mut opts = wasm_snip::Options::default();
-
-    opts.input = wasm_snip::Input::File(path::PathBuf::from(matches.value_of("input").unwrap()));
 
     opts.functions = matches
         .values_of("function")
@@ -43,7 +41,12 @@ fn try_main() -> Result<(), failure::Error> {
         opts.skip_producers_section = true;
     }
 
-    let module = wasm_snip::snip(opts).context("failed to snip functions from wasm module")?;
+    let config = walrus_config_from_options(&opts);
+    let path = matches.value_of("input").unwrap();
+    let buf = fs::read(&path).with_context(|_| format!("failed to read file {}", path))?;
+    let mut module = config.parse(&buf)?;
+
+    wasm_snip::snip(&mut module, opts).context("failed to snip functions from wasm module")?;
 
     if let Some(output) = matches.value_of("output") {
         module
@@ -63,6 +66,12 @@ fn try_main() -> Result<(), failure::Error> {
     }
 
     Ok(())
+}
+
+fn walrus_config_from_options(options: &wasm_snip::Options) -> walrus::ModuleConfig {
+    let mut config = walrus::ModuleConfig::new();
+    config.generate_producers_section(!options.skip_producers_section);
+    config
 }
 
 fn parse_args() -> clap::ArgMatches<'static> {

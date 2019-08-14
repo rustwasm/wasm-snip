@@ -133,9 +133,6 @@ impl Default for Input {
 /// snipped.
 #[derive(Clone, Debug, Default)]
 pub struct Options {
-    /// The input which should have its functions snipped.
-    pub input: Input,
-
     /// The functions that should be snipped from the `.wasm` file.
     pub functions: Vec<String>,
 
@@ -155,17 +152,7 @@ pub struct Options {
 }
 
 /// Snip the functions from the input file described by the options.
-pub fn snip(options: Options) -> Result<walrus::Module, failure::Error> {
-    let config = walrus_config_from_options(&options);
-    let mut module = match options.input {
-        Input::File(ref path) => config
-            .parse_file(&path)
-            .with_context(|_| format!("failed to parse wasm from: {}", path.display()))?,
-        Input::Buffer(ref wasm) => config
-            .parse(&wasm)
-            .with_context(|_| "failed to parse supplied wasm blob")?,
-    };
-
+pub fn snip(module: &mut walrus::Module, options: Options) -> Result<(), failure::Error> {
     if !options.skip_producers_section {
         module
             .producers
@@ -176,20 +163,14 @@ pub fn snip(options: Options) -> Result<walrus::Module, failure::Error> {
     let re_set = build_regex_set(options).context("failed to compile regex")?;
     let to_snip = find_functions_to_snip(&module, &names, &re_set);
 
-    replace_calls_with_unreachable(&mut module, &to_snip);
-    unexport_snipped_functions(&mut module, &to_snip);
-    unimport_snipped_functions(&mut module, &to_snip);
-    snip_table_elements(&mut module, &to_snip);
-    delete_functions_to_snip(&mut module, &to_snip);
-    walrus::passes::gc::run(&mut module);
+    replace_calls_with_unreachable(module, &to_snip);
+    unexport_snipped_functions(module, &to_snip);
+    unimport_snipped_functions(module, &to_snip);
+    snip_table_elements(module, &to_snip);
+    delete_functions_to_snip(module, &to_snip);
+    walrus::passes::gc::run(module);
 
-    Ok(module)
-}
-
-fn walrus_config_from_options(options: &Options) -> walrus::ModuleConfig {
-    let mut config = walrus::ModuleConfig::new();
-    config.generate_producers_section(!options.skip_producers_section);
-    config
+    Ok(())
 }
 
 fn build_regex_set(mut options: Options) -> Result<regex::RegexSet, failure::Error> {
