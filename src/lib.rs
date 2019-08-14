@@ -257,46 +257,25 @@ fn replace_calls_with_unreachable(
     to_snip: &HashSet<walrus::FunctionId>,
 ) {
     struct Replacer<'a> {
-        func: &'a mut walrus::LocalFunction,
         to_snip: &'a HashSet<walrus::FunctionId>,
     }
 
     impl Replacer<'_> {
-        // If `id` is a call to a function we are snipping, return its
-        // arguments. We need to keep the arguments around because they might
-        // perform some visible side effects.
-        fn should_snip_call(&self, id: walrus::ir::ExprId) -> Option<Vec<walrus::ir::ExprId>> {
-            if let walrus::ir::Expr::Call(walrus::ir::Call { func, args }) = self.func.get(id) {
+        fn should_snip_call(&self, instr: &walrus::ir::Instr) -> bool {
+            if let walrus::ir::Instr::Call(walrus::ir::Call { func }) = instr {
                 if self.to_snip.contains(func) {
-                    return Some(args.iter().cloned().collect());
+                    return true;
                 }
             }
-
-            None
+            false
         }
     }
 
     impl VisitorMut for Replacer<'_> {
-        fn local_function_mut(&mut self) -> &mut walrus::LocalFunction {
-            self.func
-        }
-
-        fn visit_expr_id_mut(&mut self, expr_id: &mut walrus::ir::ExprId) {
-            use walrus::ir::VisitMut;
-
-            if let Some(args) = self.should_snip_call(*expr_id) {
-                let builder = self.func.builder_mut();
-
-                let mut dropped_args = Vec::with_capacity(args.len());
-                for a in args {
-                    dropped_args.push(builder.drop(a));
-                }
-
-                let unreachable = builder.unreachable();
-                *expr_id = builder.with_side_effects(dropped_args, unreachable, vec![]);
+        fn visit_instr_mut(&mut self, instr: &mut walrus::ir::Instr) {
+            if self.should_snip_call(instr) {
+                *instr = walrus::ir::Unreachable {}.into();
             }
-
-            (*expr_id).visit_mut(self);
         }
     }
 
@@ -306,9 +285,8 @@ fn replace_calls_with_unreachable(
             return;
         }
 
-        let mut entry = func.entry_block();
-        let v = &mut Replacer { func, to_snip };
-        v.visit_block_id_mut(&mut entry);
+        let entry = func.entry_block();
+        walrus::ir::dfs_pre_order_mut(&mut Replacer { to_snip }, func, entry);
     });
 }
 
@@ -347,16 +325,22 @@ fn snip_table_elements(module: &mut walrus::Module, to_snip: &HashSet<walrus::Fu
 
     let make_unreachable_func = |ty: walrus::TypeId,
                                  types: &mut walrus::ModuleTypes,
+                                 locals: &mut walrus::ModuleLocals,
                                  funcs: &mut walrus::ModuleFunctions|
      -> walrus::FunctionId {
-        let mut builder = walrus::FunctionBuilder::new();
-        let unreachable = builder.unreachable();
-        builder.finish_parts(ty, vec![], vec![unreachable], types, funcs)
+        let ty = types.get(ty);
+        let params = ty.params().to_vec();
+        let locals: Vec<_> = params.iter().map(|ty| locals.add(*ty)).collect();
+        let results = ty.results().to_vec();
+        let mut builder = walrus::FunctionBuilder::new(types, &params, &results);
+        builder.func_body().unreachable();
+        builder.finish(locals, funcs)
     };
 
     for t in module.tables.iter_mut() {
         if let walrus::TableKind::Function(ref mut ft) = t.kind {
             let types = &mut module.types;
+            let locals = &mut module.locals;
             let funcs = &mut module.funcs;
 
             ft.elements
@@ -367,7 +351,7 @@ fn snip_table_elements(module: &mut walrus::Module, to_snip: &HashSet<walrus::Fu
                     let ty = funcs.get(*el).ty();
                     *el = *unreachable_funcs
                         .entry(ty)
-                        .or_insert_with(|| make_unreachable_func(ty, types, funcs));
+                        .or_insert_with(|| make_unreachable_func(ty, types, locals, funcs));
                 });
 
             ft.relative_elements
@@ -377,7 +361,7 @@ fn snip_table_elements(module: &mut walrus::Module, to_snip: &HashSet<walrus::Fu
                     let ty = funcs.get(*el).ty();
                     *el = *unreachable_funcs
                         .entry(ty)
-                        .or_insert_with(|| make_unreachable_func(ty, types, funcs));
+                        .or_insert_with(|| make_unreachable_func(ty, types, locals, funcs));
                 });
         }
     }
