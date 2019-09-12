@@ -53,13 +53,9 @@ fn try_main() -> Result<(), failure::Error> {
             .emit_wasm_file(output)
             .with_context(|_| format!("failed to emit snipped wasm to {}", output))?;
     } else {
-        let wasm = module
-            .emit_wasm()
-            .context("failed to re-compile snipped module to wasm")?;
-
+        let wasm = module.emit_wasm();
         let stdout = io::stdout();
         let mut stdout = stdout.lock();
-
         stdout
             .write_all(&wasm)
             .context("failed to write wasm to stdout")?;
