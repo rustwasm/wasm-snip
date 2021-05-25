@@ -1,3 +1,4 @@
+use clap::ArgMatches;
 use failure::ResultExt;
 use std::fs;
 use std::io::{self, Write};
@@ -14,32 +15,26 @@ fn main() {
     }
 }
 
+fn get_values(matches: &ArgMatches, name: &str) -> Vec<String> {
+    matches
+        .values_of(name)
+        .map(|fs| fs.map(|f| f.to_string()).collect())
+        .unwrap_or(vec![])
+}
+
 fn try_main() -> Result<(), failure::Error> {
     let matches = parse_args();
 
     let mut opts = wasm_snip::Options::default();
 
-    opts.functions = matches
-        .values_of("function")
-        .map(|fs| fs.map(|f| f.to_string()).collect())
-        .unwrap_or(vec![]);
+    opts.functions = get_values(&matches, "function");
+    opts.patterns = get_values(&matches, "pattern");
+    opts.kept_exports = get_values(&matches, "kept_export");
+    opts.kept_export_patterns = get_values(&matches, "kept_export_pattern");
 
-    opts.patterns = matches
-        .values_of("pattern")
-        .map(|ps| ps.map(|p| p.to_string()).collect())
-        .unwrap_or(vec![]);
-
-    if matches.is_present("snip_rust_fmt_code") {
-        opts.snip_rust_fmt_code = true;
-    }
-
-    if matches.is_present("snip_rust_panicking_code") {
-        opts.snip_rust_panicking_code = true;
-    }
-
-    if matches.is_present("skip_producers_section") {
-        opts.skip_producers_section = true;
-    }
+    opts.snip_rust_fmt_code = matches.is_present("snip_rust_fmt_code");
+    opts.snip_rust_panicking_code = matches.is_present("snip_rust_panicking_code");
+    opts.skip_producers_section = matches.is_present("skip_producers_section");
 
     let config = walrus_config_from_options(&opts);
     let path = matches.value_of("input").unwrap();
@@ -113,6 +108,24 @@ Very helpful when shrinking the size of WebAssembly binaries!
                 .long("pattern")
                 .takes_value(true)
                 .help("Snip any function that matches the given regular expression."),
+        )
+        .arg(
+            clap::Arg::with_name("kept_export")
+                .required(false)
+                .multiple(true)
+                .short("k")
+                .long("kept-export")
+                .takes_value(true)
+                .help("Snip exports not included. Matches exactly."),
+        )
+        .arg(
+            clap::Arg::with_name("kept_export_pattern")
+                .required(false)
+                .multiple(true)
+                .short("x")
+                .long("kept-export-pattern")
+                .takes_value(true)
+                .help("Snip exports not included. Matches exports with regular expression."),
         )
         .arg(
             clap::Arg::with_name("snip_rust_fmt_code")
