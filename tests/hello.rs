@@ -11,6 +11,17 @@ pub fn fluxions(x: usize) -> usize {
 }
 
 #[no_mangle]
+pub fn keep_me() -> usize {
+    fluxions(1)
+}
+
+#[no_mangle]
+pub fn keep_me_too() -> usize {
+    let x = 1;
+    return x;
+}
+
+#[no_mangle]
 pub fn quicksilver(x: usize) {
     if x > 100 {
         snip_me();

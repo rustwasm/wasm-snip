@@ -83,3 +83,13 @@ fn snip_rust_panicking_code() {
         "no_panicking.wasm",
     );
 }
+
+#[test]
+fn keep_exports() {
+    assert_snip(wasm_snip().arg("-k").arg("keep_me"), "kept_me.wasm");
+}
+
+#[test]
+fn keep_export_patterns() {
+    assert_snip(wasm_snip().arg("-x").arg("keep_me"), "kept_me_too.wasm");
+}

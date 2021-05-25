@@ -140,6 +140,12 @@ pub struct Options {
     /// file.
     pub patterns: Vec<String>,
 
+    /// The exports kept while others are snipped from the `.wasm`
+    pub kept_exports: Vec<String>,
+
+    /// The regex patterns of exports kept while others are snipped from the `.wasm`.
+    pub kept_export_patterns: Vec<String>,
+
     /// Should Rust `std::fmt` and `core::fmt` functions be snipped?
     pub snip_rust_fmt_code: bool,
 
@@ -159,10 +165,15 @@ pub fn snip(module: &mut walrus::Module, options: Options) -> Result<(), failure
             .add_processed_by("wasm-snip", env!("CARGO_PKG_VERSION"));
     }
 
+    let re_kept_set = regex::RegexSet::new(&options.kept_export_patterns)?;
+    let export_names: HashSet<String> = options.kept_exports.iter().cloned().collect();
+    let exports_to_delete = find_exports_to_delete(&module, &export_names, &re_kept_set);
+
     let names: HashSet<String> = options.functions.iter().cloned().collect();
     let re_set = build_regex_set(options).context("failed to compile regex")?;
     let to_snip = find_functions_to_snip(&module, &names, &re_set);
 
+    delete_exports(module, &exports_to_delete);
     replace_calls_with_unreachable(module, &to_snip);
     unexport_snipped_functions(module, &to_snip);
     unimport_snipped_functions(module, &to_snip);
@@ -225,6 +236,37 @@ fn find_functions_to_snip(
             })
         })
         .collect()
+}
+
+fn is_function(export: &walrus::Export) -> Option<&walrus::Export> {
+    match export.item {
+        walrus::ExportItem::Function(_) => Some(export),
+        _ => None,
+    }
+}
+fn find_exports_to_delete(
+    module: &walrus::Module,
+    names: &HashSet<String>,
+    re_set: &regex::RegexSet,
+) -> HashSet<walrus::ExportId> {
+    module
+        .exports
+        .iter()
+        .filter_map(is_function)
+        .filter_map(|e| {
+            if names.contains(&e.name) || re_set.is_match(&e.name) {
+                None
+            } else {
+                Some(e.id())
+            }
+        })
+        .collect()
+}
+
+fn delete_exports(module: &mut walrus::Module, to_snip: &HashSet<walrus::ExportId>) {
+    for id in to_snip.iter().cloned() {
+        module.exports.delete(id)
+    }
 }
 
 fn delete_functions_to_snip(module: &mut walrus::Module, to_snip: &HashSet<walrus::FunctionId>) {
