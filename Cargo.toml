@@ -37,4 +37,4 @@ default = ["exe"]
 exe = ["clap"]
 
 [dev-dependencies]
-assert_cmd = "1.0.0"
+assert_cmd = "2.0.1"
