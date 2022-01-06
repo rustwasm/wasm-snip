@@ -30,7 +30,7 @@ rayon = "1.2.0"
 
 [dependencies.clap]
 optional = true
-version = "2.33.0"
+version = "3.0.5"
 
 [features]
 default = ["exe"]
